@@ -3,6 +3,31 @@
 ####################################
 
 #######################################################
+#' custom_apply Function
+#' @author Crhisto
+#' @description Apply function for sparse matrix with the same parameter form that the native apply.
+#' @name custom_apply
+#' @param X matrix to apply the function (sparse matrix)
+#' @param MARGIN  1 for rows, 2 for columns
+#' @param FUN function for apply to the X matrix
+#' @return Matrix resulted with the function applied to original X matrix
+#' @export
+library(slam)
+custom_apply <- function (X, MARGIN, FUN)
+{
+  x_value <- as.simple_triplet_matrix(X)
+
+  if(MARGIN==1){
+    return <- rowapply_simple_triplet_matrix(x_value, FUN=FUN)
+  }else if(MARGIN==2){
+    return <- colapply_simple_triplet_matrix(x_value, FUN=FUN)
+  }else{
+    stop('The custom_apply function needs a MARGIN value equal to 1=row, 2=column.')
+  }
+  return
+}
+
+#######################################################
 #' Normalize matrix / vector
 #' @description Normalize matrix by column or normalize a vector
 #' @name getCPM0
@@ -16,7 +41,8 @@ getCPM0 <- function(x, verbose = F){
     vec = as.matrix(x/sum(x))
     vec
   } else {
-    cpm <- t(t(x)/apply(x,2,sum))
+    #Using the custom_apply for sparse matrix
+    cpm <- t(t(x)/custom_apply(x,2,sum))
     cpm
   }
 }
@@ -35,7 +61,8 @@ library(Biobase)
 getESET <- function(exprs, fdata, pdata){
   pdata <- as.data.frame(pdata)
   fdata <- as.data.frame(fdata)
-  exprs <- as.matrix(exprs)
+  #exprs <- as.matrix(exprs)
+  exprs <- Matrix(exprs, sparse = TRUE)
   rownames(pdata) <- colnames(exprs)
   rownames(fdata) <- rownames(exprs)
   eset <- ExpressionSet(exprs,
@@ -199,6 +226,10 @@ generateBulk_norep <- function(eset, ct.varname, sample, disease = NULL, ct.sub,
 
     out = rowSums(temp.b1)
     pseudo_bulk <- cbind(pseudo_bulk, out)
+
+    #convert to sparse matrix
+    pseudo_bulk <- Matrix(pseudo_bulk, sparse = TRUE)
+
     colnames(pseudo_bulk)[xx] <- paste(pseudo_donors[xx],xx,sep = "_")
   }
   # create pseudo eset for bulk sample.id
@@ -345,10 +376,22 @@ SCDC_yeval <- function(y, yest, yest.names=NULL){
   evals <- lapply(yest, function(xx){
     if (!is.null(xx)){
       if (dim(xx)[2] >1){
+        #save(y, file="/mnt_volumen/datasets/public/brain/split-seq_paper/y_SCDC.Rdata")
+        #save(yest, file="/mnt_volumen/datasets/public/brain/split-seq_paper/yest_SCDC.Rdata")
+        #save(xx, file="/mnt_volumen/datasets/public/brain/split-seq_paper/xx_SCDC.Rdata")
+
         g.use = intersect(rownames(y), rownames(xx))
         y.norm <- getCPM0(y[g.use,])
         x = xx[g.use,colnames(y)]
         yest.norm = getCPM0(x)
+
+        #workaround: convert the sparse matrix to matrix due to the size of the actual matrix.
+        yest.norm <- as.matrix(yest.norm)
+        y.norm <- as.matrix(y.norm)
+
+        #View(g.use)
+        #View(y.norm)
+        #View(yest.norm)
         spearmany <-round(cor(c(yest.norm), c(y.norm), method = "spearman"), digits = 5)
         RMSDy = round(sqrt(mean((yest.norm - y.norm)^2)), digits = 7)
         mADy = round(mean(abs(yest.norm - y.norm)), digits = 8)
@@ -424,9 +467,12 @@ SCDC_yeval <- function(y, yest, yest.names=NULL){
 wt_prop <- function(wt, proplist){
   wt <- as.numeric(wt)
   combo.list <- list()
+
   for (i in 1:length(proplist)){
     combo.list[[i]] <- proplist[[i]]*wt[i]
   }
+
+  #Sum up each cluster value that was multiplied by the weight
   combo.prop <- Reduce("+", combo.list)
   return(combo.prop)
 }

@@ -51,19 +51,25 @@ SCDC_ENSEMBLE <- function(bulk.eset, sc.eset.list = NULL, ct.varname, sample,
   row.list <- sapply(1:length(prop.list), function(x){
     rownames(prop.list[[x]]$yhat)
   })
+
   gene.prop <- Reduce("intersect", row.list)
   gene.prop2 <- intersect(gene.prop, rownames(bulk.eset))
-  subj.order <- colnames(bulk.eset)
+
+    subj.order <- colnames(bulk.eset)
   ycpm <- getCPM0(exprs(bulk.eset)[gene.prop2,subj.order])
+
   g.filter <- rowSums(ycpm) < quantile(rowSums(ycpm), 0.95) & rowSums(ycpm) > quantile(rowSums(ycpm), 0.15)
+  #g.filter <- rowSums(ycpm) < quantile(rowSums(ycpm), 0.90) & rowSums(ycpm) > quantile(rowSums(ycpm), 0.10)
   gene.use <- gene.prop2[g.filter]
+
   length(gene.use)
-  yv <- c(getCPM0(exprs(bulk.eset)[gene.use,subj.order]))*1e5 #vectorize y to make computing faster. scale to 100,000
+
+  #convert the sparse original matrix into normal matrix
+  yv <- c(as.matrix(getCPM0(exprs(bulk.eset)[gene.use,subj.order]))) * 1e5 #vectorize y to make computing faster. scale to 100,000
 
   y.list <- do.call(cbind, lapply(prop.list, function(x){
     c(getCPM0(x$yhat[gene.use,subj.order]))*1e5
   }))
-
 
   sse <- function(x,y){
     sum((x-y)^2, na.rm = T)
@@ -99,6 +105,8 @@ SCDC_ENSEMBLE <- function(bulk.eset, sc.eset.list = NULL, ct.varname, sample,
   message("Searching ENSEMBLE weight by LAD -- Minimizing mAD of Y measurement")
   w_lad <-NA
   dt <- data.frame(y = yv, y.list)
+
+
   fitlad <- L1pack::lad(y~.-1, data = dt, method = c("BR", "EM"))
   w_lad <- fitlad$coefficients
   w_lad[w_lad <0] <- 0
@@ -160,6 +168,8 @@ SCDC_ENSEMBLE <- function(bulk.eset, sc.eset.list = NULL, ct.varname, sample,
     w_spearman <- gridmat[which.max(search.y[,4]),]
   }
 
+
+
   # ----------------------------------------------
   # summarize all weights and performances
   if (!is.null(truep)){
@@ -184,7 +194,9 @@ SCDC_ENSEMBLE <- function(bulk.eset, sc.eset.list = NULL, ct.varname, sample,
         w_eval$evals.table
       })
     )
+
     colnames(eval.prop) <- c("RMSD_prop","mAD_prop","R_prop")
+
     eval.y <- t(
       apply(weight.mat, 1, function(x){
         temp <- wt_y(x, y.list = y.list)
@@ -198,6 +210,7 @@ SCDC_ENSEMBLE <- function(bulk.eset, sc.eset.list = NULL, ct.varname, sample,
     }
     out <- cbind(round(weight.mat,2), eval.y, eval.prop)
   } else {
+
     weight.mat <- rbind(
       sse.wt,
       sae.wt,
@@ -209,6 +222,8 @@ SCDC_ENSEMBLE <- function(bulk.eset, sc.eset.list = NULL, ct.varname, sample,
       w_spearman)
     rownames(weight.mat) <- c("inverse SSE", "inverse SAE","inverse RMSD","LAD","NNLS",
                               "mAD_Y","RMSD_Y","Spearman_Y")
+
+
     eval.y <- t(
       apply(weight.mat, 1, function(x){
         temp <- wt_y(x, y.list = y.list)
@@ -216,11 +231,15 @@ SCDC_ENSEMBLE <- function(bulk.eset, sc.eset.list = NULL, ct.varname, sample,
         c(sqrt(mean((yv-temp)^2)), mean(abs(yv - temp)), cor(yv, temp, method = "pearson"), cor(yv, temp, method = "spearman"))
       })
     )
+
     colnames(eval.y) <- c("RMSD_Y", "mAD_Y","Pearson_Y","Spearman_Y")
+
     if (grid.search){
       gridres <- cbind(search.y, gridmat)
     }
+
     out <- cbind(round(weight.mat,2), eval.y)
   }
+
   return(list(w_table = out, prop.list = prop.list, prop.only = combo, gridres = gridres))
 }
