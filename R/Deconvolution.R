@@ -1833,7 +1833,7 @@ iteration_over_clusters_parallelized_wilcox_boostrap <- function(sc.eset, ct.gro
       }
 
       #I add normal behaviour if there are zero genes with boostraping strategy (< iteration.minimun_number_markers)
-      if(length(markers.temp) == 0 & iteration.use_final_foldchange){
+      if(length(markers.temp) < iteration.minimun_number_markers & iteration.use_final_foldchange){
 
         #call the analizer with  min.p.adj_value = 0.05 that corresponds to the original version of the algorithm
         foldchange_genes = bootstrap_gene_finder(cluster_number, seurat_object, bootstrap.sample_size = bootstrap.sample_size, min.p.adj_value = 0.05)
@@ -1912,18 +1912,12 @@ bootstrap_gene_finder <- function(cluster_number, seurat_object, LFC.lim = 0.20,
     bootstrap.sample_size <- as.integer(number_of_clusters*0.15)
   }
 
-  #temporal for brain=10 (73 clusters) and thymus=5 (29 clusters)
-  #bootstrap.sample_size <- 10
-  #bootstrap.sample_size <- 5
-
   final_result <- NULL
   for(counter in 1:bootstrap_number){
 
     set.seed(Sys.time())
 
     #TODO create a generalization for other datasets without the requeriment of having a cluster_normalized vector
-    #all_clusters <- c(1:73)
-    #all_clusters <- c(1:29)
 
     #Create a list with the number of clusters
     all_clusters <- c(1:number_of_clusters)
@@ -1973,7 +1967,7 @@ bootstrap_gene_finder <- function(cluster_number, seurat_object, LFC.lim = 0.20,
 #' @param filtered.wilcox Wilcox object with the Foldchange analysis base on the comparison between each cluster amoung the others
 #' @return List with the marker genes
 #' @export
-calculate_genes_using_dbscan <- function(filtered.wilcox){
+calculate_genes_using_dbscan <- function(filtered.wilcox, plot.dbscan.results = FALSE){
   library("fpc")
   library("dbscan")
   final_result <- NULL
@@ -1986,7 +1980,9 @@ calculate_genes_using_dbscan <- function(filtered.wilcox){
     length(db$cluster[db$cluster==0])
 
     # Plot DBSCAN results
-    plot(db, filtered.wilcox$avg_logFC, main = "DBSCAN", frame = FALSE)
+    if(plot.dbscan.results){
+      plot(db, filtered.wilcox$avg_logFC, main = "DBSCAN", frame = FALSE)
+    }
 
     #select genes in the cluster 0
     rownames(filtered.wilcox)[db$cluster==0]
