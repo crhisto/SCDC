@@ -36,12 +36,12 @@ SCDC_basis <- function(x, ct.sub = NULL, ct.varname, sample){
   sigma <- sapply(unique(mean.id[,1]), function(id){
     y = mean.mat[,mean.id[,1] %in% id]
 
-    #with there are not all samples for each cluster
+    #When there are not all samples for each cluster
     if(class(y)=='matrix')
       apply(y,1,var, na.rm = TRUE)
     else{
       print('Fixing problem with cluster and sample.')
-      #I add zero to the first column in order to create a simulated data that should create a proportion of zero.
+      #it adds zero to the first column in order to create a simulated data that should create a proportion of zero.
       y <-numeric(length(y))
       apply(cbind(y,numeric(length(y))),1,var, na.rm = TRUE)
     }
@@ -846,7 +846,7 @@ SCDC_prop_subcl_marker <- function(bulk.eset, sc.eset, ct.varname, fl.varname, s
                                    select.marker = T, markers = NULL, marker.varname = NULL, allgenes.fl = F,
                                    pseudocount.use = 1, LFC.lim = 0.5, parallelize= F, core_number = NULL, fix_number_genes = NULL, marker_gene_strategy = 'boostrap_outliers',
                                    iteration.minimun_number_markers = 28, iteration.use_maximum = FALSE, iteration.maximo_genes = 35, iteration.use_final_foldchange = FALSE,
-                                   bootstrap.sample_size = NULL,...) {
+                                   bootstrap.sample_size = NULL, additional_genes = NUL,...) {
 
   sc.eset.orig <- sc.eset
 
@@ -970,6 +970,12 @@ SCDC_prop_subcl_marker <- function(bulk.eset, sc.eset, ct.varname, fl.varname, s
       }
     }
 
+    #Adding the genes that must be in the analysis
+    if(!is.null(additional_genes)){
+      message('*Additional genes for the analysis: ', paste(shQuote(additional_genes), collapse=", "))
+      markers.wilcox <- c(markers.wilcox, additional_genes)
+    }
+    
     markers <- unique(markers.wilcox)
     message("Global minimun LFC (1 marker): ", global.min.LFC)
     message("Global minimun LFC (Minimum ", top_genes, ' genes marker): ', global.genes.diff.LFC_max.top.cluster)
@@ -1005,6 +1011,17 @@ SCDC_prop_subcl_marker <- function(bulk.eset, sc.eset, ct.varname, fl.varname, s
 
   message('Genes that are not shared between SC and bulk:')
   message('*Cluster(',length(non_commongenes), '):',paste(shQuote(non_commongenes), collapse=", "))
+  
+  if(length(non_commongenes)>0){
+    non_commongenes.basis  <- Reduce(intersect, rownames(basis), non_commongenes)
+    non_commongenes.bulk  <- Reduce(intersect, rownames(bulk.eset), non_commongenes)
+    non_commongenes.markers  <- Reduce(intersect, markers, non_commongenes)
+    
+    message('    -->non_commongenes.basis(',length(non_commongenes.basis), '):',paste(shQuote(non_commongenes.basis), collapse=", "))
+    message('    -->non_commongenes.bulk(',length(non_commongenes.bulk), '):',paste(shQuote(non_commongenes.bulk), collapse=", "))
+    message('    -->non_commongenes.markers(',length(non_commongenes.markers), '):',paste(shQuote(non_commongenes.markers), collapse=", "))
+  }
+  
   message('**Metacluster(', length(non_commongenes.fl), '):', paste(shQuote(non_commongenes.fl), collapse=", "))
 
   basis.mvw <- basis[commongenes, ct.sub]
@@ -1036,11 +1053,17 @@ SCDC_prop_subcl_marker <- function(bulk.eset, sc.eset, ct.varname, fl.varname, s
   prop.est <- NULL
   rsquared <- NULL
 
+  #Global residuals
+  residuals.deviance.sum <- 0
+  
+  #vector with the number of spaces equal to the number of samples in the bulk data
+  residuals.list <- vector(mode = "list", length = ncol(bulk.eset))
+  
   # prop estimation for each bulk sample:
   for (i in 1:N.bulk) {
     # i=1
     xbulk.temp <- xbulk[, i] ## *1e3  will affect a little bit
-    message(paste(colnames(xbulk)[i], "has common genes", sum(xbulk[, i] != 0), "..."))
+    message('\n', paste(colnames(xbulk)[i], "has common genes", sum(xbulk[, i] != 0), "..."))
     if (allgenes.fl){
       markers.fl <- names(xbulk.temp)
     } else {
@@ -1053,7 +1076,7 @@ SCDC_prop_subcl_marker <- function(bulk.eset, sc.eset, ct.varname, fl.varname, s
     wt.gene <- 1/(nu + delta^2)
     x.wt <- xbulk.temp[markers.fl] *sqrt(wt.gene)
     b.wt <- sweep(basis.mvw.fl[markers.fl,],1,sqrt(wt.gene),"*")
-
+    
     lm.wt <- nnls::nnls(A=b.wt, b=x.wt)
     prop.wt.fl <- lm.wt$x/sum(lm.wt$x)
     delta <- lm.wt$residuals
@@ -1082,7 +1105,10 @@ SCDC_prop_subcl_marker <- function(bulk.eset, sc.eset, ct.varname, fl.varname, s
     rt <- rt[,ct.fl.sub]
     rt.list <- list()
     prop.wt <- NULL
-
+    
+    residual_matrix.bulk_sample = NULL
+    residual_matrix.bulk_sample.column.names <- NULL
+    
     # prop.wt
     for (j in 1:ncol(rt)){ # for each first level cluster
       # j=1
@@ -1122,10 +1148,27 @@ SCDC_prop_subcl_marker <- function(bulk.eset, sc.eset, ct.varname, fl.varname, s
           delta.sl.new <- lm.wt.sl$residuals
           prop.wt.sl.new <- lm.wt.sl$x/sum(lm.wt.sl$x)
 
+          #checking the difference between the new proportion and the old based on a epsilon value
           if (sum(abs(prop.wt.sl.new - prop.wt.sl)) < epsilon){
             prop.wt.sl <- prop.wt.sl.new
             delta.sl <- delta.sl.new
-            message("WNNLS for Second level clusters",paste(shQuote(rownames(rt)[rt[,j] >0]), collapse=", ")," Converged at iteration ", iter)
+            
+            cluster_names.subcluster <- paste(shQuote(rownames(rt)[rt[,j] >0]), collapse=", ")
+            message("WNNLS for Second level clusters: ",cluster_names.subcluster," Converged at iteration ", iter)
+            
+            #squared residuals for the celltype/subclustering which means multiples celltypes residuals.
+            residuals.squared <- lm.wt.sl$residuals^2
+
+            #adding the residual for the cell types belonging to the subcluster of the iteration
+            residual_matrix.bulk_sample <- cbind(residual_matrix.bulk_sample, residuals.squared)
+            
+            #add name for residuals
+            cluster_names.subcluster <- str_replace_all(cluster_names.subcluster, "'", '')
+            cluster_names.subcluster <- str_replace_all(cluster_names.subcluster, ", ", '-')
+            residual_matrix.bulk_sample.column.names <- c(residual_matrix.bulk_sample.column.names, cluster_names.subcluster)
+            
+            message(paste0('***Step sum squared residuals (deviance): ', lm.wt.sl$deviance))
+            residuals.deviance.sum <- residuals.deviance.sum + lm.wt.sl$deviance
             break
           }
           prop.wt.sl <- prop.wt.sl.new
@@ -1144,9 +1187,18 @@ SCDC_prop_subcl_marker <- function(bulk.eset, sc.eset, ct.varname, fl.varname, s
 
     }
     prop.est <- rbind(prop.est, prop.wt)
+    
+    #residuals object
+    colnames(residual_matrix.bulk_sample) <- residual_matrix.bulk_sample.column.names
+    residuals.list[[i]] <- residual_matrix.bulk_sample
   }
   rownames(prop.est) <- colnames(bulk.eset)
 
+  #Adding the names of the residuals matrices in the list object which is the same of the bulk dataset
+  names(residuals.list) <- colnames(bulk.eset)
+  
+  message(paste0('***Global residuals: ', residuals.deviance.sum))
+  
   peval <- NULL
   if (!is.null(truep)){
     peval <- SCDC_peval(ptrue= truep, pest = prop.est, pest.names = c('SCDC'),
@@ -1154,7 +1206,7 @@ SCDC_prop_subcl_marker <- function(bulk.eset, sc.eset, ct.varname, fl.varname, s
   }
 
   return(list(prop.est = prop.est, prop.wt.fl = prop.wt.fl, basis.mvw = basis.mvw, peval = peval,
-              sc.basis = sc.basis, sc.fl.basis = sc.fl.basis))
+              sc.basis = sc.basis, sc.fl.basis = sc.fl.basis, residual.list = residuals.list))
 }
 
 #function to save message in a log file for each loop
