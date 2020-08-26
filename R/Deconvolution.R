@@ -846,7 +846,7 @@ SCDC_prop_subcl_marker <- function(bulk.eset, sc.eset, ct.varname, fl.varname, s
                                    select.marker = T, markers = NULL, marker.varname = NULL, allgenes.fl = F,
                                    pseudocount.use = 1, LFC.lim = 0.5, parallelize= F, core_number = NULL, fix_number_genes = NULL, marker_gene_strategy = 'boostrap_outliers',
                                    iteration.minimun_number_markers = 28, iteration.use_maximum = FALSE, iteration.maximo_genes = 35, iteration.use_final_foldchange = FALSE,
-                                   bootstrap.sample_size = NULL, additional_genes = NUL,...) {
+                                   bootstrap.sample_size = NULL, bootstrap.number = NULL, additional_genes = NUL,...) {
 
   sc.eset.orig <- sc.eset
 
@@ -966,7 +966,7 @@ SCDC_prop_subcl_marker <- function(bulk.eset, sc.eset, ct.varname, fl.varname, s
         #improve with boostrap
         markers.wilcox <- iteration_over_clusters_parallelized_wilcox_boostrap(sc.eset = sc.eset.orig, ct.group = ct.group, core_number = core_number,
                                                                                iteration.minimun_number_markers = iteration.minimun_number_markers, iteration.use_maximum = iteration.use_maximum, iteration.maximo_genes = iteration.maximo_genes,
-                                                                               iteration.use_final_foldchange = iteration.use_final_foldchange, bootstrap.sample_size = bootstrap.sample_size)
+                                                                               iteration.use_final_foldchange = iteration.use_final_foldchange, bootstrap.sample_size = bootstrap.sample_size, bootstrap.number = bootstrap.number)
       }
     }
 
@@ -1058,9 +1058,14 @@ SCDC_prop_subcl_marker <- function(bulk.eset, sc.eset, ct.varname, fl.varname, s
   
   #vector with the number of spaces equal to the number of samples in the bulk data
   residuals.list <- vector(mode = "list", length = ncol(bulk.eset))
-  
+  residuals_by_sample.list <- vector(mode = "list", length = ncol(bulk.eset))
+  residuals_by_sample.list.fl <- vector(mode = "list", length = ncol(bulk.eset))
+
   # prop estimation for each bulk sample:
   for (i in 1:N.bulk) {
+    #sum of the residuals for each sample
+    residuals_by_sample <- 0
+    
     # i=1
     xbulk.temp <- xbulk[, i] ## *1e3  will affect a little bit
     message('\n', paste(colnames(xbulk)[i], "has common genes", sum(xbulk[, i] != 0), "..."))
@@ -1093,6 +1098,10 @@ SCDC_prop_subcl_marker <- function(bulk.eset, sc.eset, ct.varname, fl.varname, s
         prop.wt.fl <- prop.wt.fl.new
         delta <- delta.new
         message("WNNLS for First level clusters Converged at iteration ", iter)
+        message(paste0('***First level clusters -> Step sum squared residuals (deviance) : ', lm.wt$deviance), '\n')
+        
+        #add the residuals for the subclustering 
+        residuals_by_sample.list.fl[[i]] <- lm.wt$deviance
         break
       }
       prop.wt.fl <- prop.wt.fl.new
@@ -1156,6 +1165,26 @@ SCDC_prop_subcl_marker <- function(bulk.eset, sc.eset, ct.varname, fl.varname, s
             cluster_names.subcluster <- paste(shQuote(rownames(rt)[rt[,j] >0]), collapse=", ")
             message("WNNLS for Second level clusters: ",cluster_names.subcluster," Converged at iteration ", iter)
             
+            
+            
+            
+            ########Reconstruction of the matrices B.P=Y
+            Y <- x.wt.sl
+            B <- b.wt.sl
+            P <- lm.wt.sl$x
+            
+            #matrices.list <- list(Y=Y, B=B, P=P)
+
+            #save parameters.
+            #save(matrices.list, file = "/mnt_volumen/temporal_objects_R/matrices.list.R")
+            
+            residuals.temporal <- calculate_residual(Y, B, P)
+            message('Residual based on a reconstruction function: ', residuals.temporal)
+            
+            ################################################################################
+            
+            
+
             #squared residuals for the celltype/subclustering which means multiples celltypes residuals.
             residuals.squared <- lm.wt.sl$residuals^2
 
@@ -1169,6 +1198,7 @@ SCDC_prop_subcl_marker <- function(bulk.eset, sc.eset, ct.varname, fl.varname, s
             
             message(paste0('***Step sum squared residuals (deviance): ', lm.wt.sl$deviance))
             residuals.deviance.sum <- residuals.deviance.sum + lm.wt.sl$deviance
+            residuals_by_sample <- residuals_by_sample + lm.wt.sl$deviance
             break
           }
           prop.wt.sl <- prop.wt.sl.new
@@ -1184,20 +1214,29 @@ SCDC_prop_subcl_marker <- function(bulk.eset, sc.eset, ct.varname, fl.varname, s
         names(prop.wt.sl) <- sub.cl
         prop.wt <- c(prop.wt, prop.wt.sl)
       }
-
+      
     }
     prop.est <- rbind(prop.est, prop.wt)
     
     #residuals object
     colnames(residual_matrix.bulk_sample) <- residual_matrix.bulk_sample.column.names
     residuals.list[[i]] <- residual_matrix.bulk_sample
+    
+    #residual list with the sum of each residual sample
+    residuals_by_sample.list[[i]] <- residuals_by_sample
+    
+    #Show residuals_by_sample
+    message(paste0('Sum of deviance (Squared residuals) for the sample: ', residuals_by_sample))
   }
   rownames(prop.est) <- colnames(bulk.eset)
 
   #Adding the names of the residuals matrices in the list object which is the same of the bulk dataset
   names(residuals.list) <- colnames(bulk.eset)
+  names(residuals_by_sample.list) <- colnames(bulk.eset)
+  names(residuals_by_sample.list.fl) <- colnames(bulk.eset)
   
-  message(paste0('***Global residuals: ', residuals.deviance.sum))
+  message(paste0('\n', '***Global residuals fl (deviance) subclustering: ', sum(unlist(residuals_by_sample.list.fl))))
+  message(paste0('\n', '***Global residuals (deviance): ', residuals.deviance.sum))
   
   peval <- NULL
   if (!is.null(truep)){
@@ -1206,14 +1245,22 @@ SCDC_prop_subcl_marker <- function(bulk.eset, sc.eset, ct.varname, fl.varname, s
   }
 
   return(list(prop.est = prop.est, prop.wt.fl = prop.wt.fl, basis.mvw = basis.mvw, peval = peval,
-              sc.basis = sc.basis, sc.fl.basis = sc.fl.basis, residual.list = residuals.list))
+              sc.basis = sc.basis, sc.fl.basis = sc.fl.basis, 
+              residual.list = residuals.list, residuals.by.sample.list = residuals_by_sample.list,
+              residuals_by_sample.list.fl = residuals_by_sample.list.fl))
 }
 
-#function to save message in a log file for each loop
+############################################
+#' Function to save message in a log file for each loop:
+#' @description  Function to save message in a log file for each loop
+#' @name save_log_file
+#' @param file_path  Path in the server to save the file
+#' @param file_name Name of the file to be saved
+#' @param message1 Message # 1 to be saved
+#' @export
 save_log_file <- function(file_path, file_name, message1, message2){
-
   file_name_path <- paste0(file_path, '/', file_name)
-  write(paste0(message1, '\n', message2), file=file_name_path,append=TRUE)
+  write(paste0(message1, '\n', message2), file = file_name_path, append = TRUE)
 }
 
 ############################################
@@ -1612,7 +1659,8 @@ iteration_over_clusters_parallelized_wilcox_outlier <- function(sc.eset, ct.grou
   library(foreach)
   library(doParallel)
   library(Seurat)
-  library("fpc")
+  library(fpc)
+  library(tidyverse)
 
   if(is.null(core_number)){
     # Calculate the number of cores
@@ -1765,7 +1813,7 @@ iteration_over_clusters_parallelized_wilcox_outlier <- function(sc.eset, ct.grou
 #' @export
 iteration_over_clusters_parallelized_wilcox_boostrap <- function(sc.eset, ct.group, core_number = NULL, LFC.lim = 0.20,
                                                                  iteration.minimun_number_markers = 28, iteration.use_maximum = TRUE, iteration.maximo_genes = 35, iteration.use_final_foldchange = FALSE,
-                                                                 bootstrap.sample_size = NULL,...){
+                                                                 bootstrap.sample_size = NULL, bootstrap.number = NULL,...){
 
   print(paste0('Parameters for iteration: ', "iteration.minimun_number_markers:", iteration.minimun_number_markers, ", iteration.use_maximum:", iteration.use_maximum, " iteration.maximo_genes:", iteration.maximo_genes))
 
@@ -1782,7 +1830,6 @@ iteration_over_clusters_parallelized_wilcox_boostrap <- function(sc.eset, ct.gro
 
   library(foreach)
   library(doParallel)
-  library(Seurat)
   library(fpc)
 
   if(is.null(core_number)){
@@ -1800,6 +1847,7 @@ iteration_over_clusters_parallelized_wilcox_boostrap <- function(sc.eset, ct.gro
   if(file.exists(temporal_directory)){
     #delete the directory
     unlink(temporal_directory, recursive = TRUE)
+    print('The temporal folder has been deleted.')
   }
 
   #create the directory
@@ -1822,9 +1870,13 @@ iteration_over_clusters_parallelized_wilcox_boostrap <- function(sc.eset, ct.gro
       set.seed(Sys.time())
 
       gc()
-      library("stringr")
+      library(stringr)
       cluster_name <- ct.group.final[u]
       cluster_number <- as.numeric(str_remove(cluster_name, 'cluster_'))
+      
+      #delete after debug
+      #cluster_name <- 'cluster_8'
+      #cluster_number <- 8
 
       #calculate number of cell for the cluster
       number_cells <- as.numeric(cells_by_cluster[rownames(cells_by_cluster)==cluster_name,])
@@ -1835,8 +1887,9 @@ iteration_over_clusters_parallelized_wilcox_boostrap <- function(sc.eset, ct.gro
 
       message1 <- (paste0('Cluster: ', cluster_name, ' Number of cells: ', number_cells))
       print(message1)
+      print('sis is')
 
-      markers.wilcox <- NULL
+      markers.wilcox.int <- NULL
       check_boostrap = F
 
       if(number_cells <= 3){
@@ -1844,11 +1897,11 @@ iteration_over_clusters_parallelized_wilcox_boostrap <- function(sc.eset, ct.gro
         print(message1)
         check_boostrap = FALSE
       }else{
-
+        print('after else')
         its_well_calculated <- TRUE
 
         result = tryCatch({
-          markers.wilcox <- FindMarkers(seurat_object, ident.1 = cluster_name, ident.2 = NULL, only.pos = TRUE, logfc.threshold = LFC.lim, verbose = F)
+          markers.wilcox.int <- FindMarkers(seurat_object, ident.1 = cluster_name, ident.2 = NULL, only.pos = TRUE, logfc.threshold = LFC.lim, verbose = F)
         }, warning = function(w) {
           print(paste0("warning", w))
         }, error = function(e) {
@@ -1857,14 +1910,22 @@ iteration_over_clusters_parallelized_wilcox_boostrap <- function(sc.eset, ct.gro
         }, finally = {
         })
 
-        if(its_well_calculated & !is.null(markers.wilcox)){
+        print(paste0('after catch', nrow(markers.wilcox.int), its_well_calculated))
+        
+        if(its_well_calculated & !is.null(markers.wilcox.int)){
 
-          markers.wilcox.filtered <- markers.wilcox[markers.wilcox$p_val_adj == 0 & !is.na(markers.wilcox$p_val_adj) & !is.na(rownames(markers.wilcox)) & rownames(markers.wilcox) != 'NA',]
+          print('in first if its_well_calculated and is.null(markers.wilcox.int)')
+          
+
+          markers.wilcox.filtered <- markers.wilcox.int[markers.wilcox.int$p_val_adj == 0 & !is.na(markers.wilcox.int$p_val_adj) & !is.na(rownames(markers.wilcox.int)) & rownames(markers.wilcox.int) != 'NA',]
+          print('Number 2')
           markers.temp <- rownames(markers.wilcox.filtered)
 
           #for checking progress for each cluster
           message1 <- paste0(message1, '\n', cluster_name, "(", length(markers.temp), ') -> Number of cells: ', number_cells, ' *****Genes: ', paste(shQuote(markers.temp), collapse=", "))
-
+          print(message1)
+          print('It has to print before: ')
+          
           #add other markers with boostrap
           if(nrow(markers.wilcox.filtered) <= iteration.minimun_number_markers){
             check_boostrap = T
@@ -1875,11 +1936,15 @@ iteration_over_clusters_parallelized_wilcox_boostrap <- function(sc.eset, ct.gro
           check_boostrap = F
         }
       }
+      
+      print(paste0('check_boostrap', check_boostrap))
 
       if(check_boostrap){
         #call the analizer
-        bootstrap_genes = bootstrap_gene_finder(cluster_number, seurat_object, bootstrap.sample_size = bootstrap.sample_size)
+        print('check_boostrap')
+        bootstrap_genes = bootstrap_gene_finder(cluster_number, seurat_object, bootstrap.sample_size = bootstrap.sample_size, bootstrap.number = bootstrap.number)
         message1 <- paste0(message1, '\n', 'Boostrap generation: ', "(", length(bootstrap_genes), ') -> Number of cells: ', number_cells, '. *****Genes: ', paste(shQuote(bootstrap_genes), collapse=", "))
+        print(message1)
         markers.temp <- c(markers.temp, bootstrap_genes)
         markers.temp <- unique(markers.temp)
       }
@@ -1887,9 +1952,11 @@ iteration_over_clusters_parallelized_wilcox_boostrap <- function(sc.eset, ct.gro
       #I add normal behaviour if there are zero genes with boostraping strategy (< iteration.minimun_number_markers)
       if(length(markers.temp) < iteration.minimun_number_markers & iteration.use_final_foldchange){
 
+        print('iteration.use_final_foldchange')
         #call the analizer with  min.p.adj_value = 0.05 that corresponds to the original version of the algorithm
-        foldchange_genes = bootstrap_gene_finder(cluster_number, seurat_object, bootstrap.sample_size = bootstrap.sample_size, min.p.adj_value = 0.05)
+        foldchange_genes = bootstrap_gene_finder(cluster_number, seurat_object, bootstrap.sample_size = bootstrap.sample_size, bootstrap.number = bootstrap.number, min.p.adj_value = 0.05)
         message1 <- paste0(message1, '\n', 'Foldchange generation: ', "(", length(foldchange_genes), ') -> Number of cells: ', number_cells, '. *****Genes: ', paste(shQuote(foldchange_genes), collapse=", "))
+        print(message1)
         markers.temp <- c(markers.temp, foldchange_genes)
         markers.temp <- unique(markers.temp)
       }
@@ -1900,11 +1967,13 @@ iteration_over_clusters_parallelized_wilcox_boostrap <- function(sc.eset, ct.gro
       }
 
       message2 <- paste0('\n','Final Genes', " (", length(markers.temp), '):',paste(shQuote(markers.temp), collapse=", "), "\n\n")
+      print(message2)
 
       #For checking the genes selected as markers for an specific cluster
       save_log_file(temporal_directory, paste0(cluster_name,'.log'), message1, message2)
-      print(paste0(message1, ' ', message2))
 
+      print(paste0('end of loop: ', length(markers.temp)))
+      
       markers.temp
     }
 
@@ -1946,11 +2015,11 @@ iteration_over_clusters_parallelized_wilcox_boostrap <- function(sc.eset, ct.gro
 #' @param seurat_object  Seural object for single cells that enable us to apply the function FindMarkers
 #' @param use_limit TRUE/FALSE. If the process selects just a fixed number of genes.
 #' @param maximo_genes Maximum number of genes that have to be selected.
-#' @param bootstrap_number  How many boostraping loops the algorithm is going to execute
+#' @param bootstrap.number  How many boostraping loops the algorithm is going to execute
 #' @param min.p.adj_value   Value that should be greater or equal to zero. Normally it is 0.05
 #' @return List with the marker genes
 #' @export
-bootstrap_gene_finder <- function(cluster_number, seurat_object, LFC.lim = 0.20, use_limit = FALSE, maximo_genes = 20, bootstrap_number = 100, bootstrap.sample_size = NULL, min.p.adj_value = 0,...){
+bootstrap_gene_finder <- function(cluster_number, seurat_object, LFC.lim = 0.20, use_limit = FALSE, maximo_genes = 20, bootstrap.number = 100, bootstrap.sample_size = NULL, min.p.adj_value = 0,...){
 
   #restarting the seed to allow different results
   rm(.Random.seed, envir=globalenv())
@@ -1959,28 +2028,35 @@ bootstrap_gene_finder <- function(cluster_number, seurat_object, LFC.lim = 0.20,
   #I have to calculate dynamically the number of clusters in the cluster_normalized that at the end is set to the Identity in the Seurat object.
   number_of_clusters <- length(unique(Idents(seurat_object)))
 
+  #I get the list of number of cluster normalized due to the fact that could be no sequentials numbers.
+  cluster_numbers.list <- sub('cluster_', '', unique(Idents(seurat_object)))
+  
   #Calculate the sample size having a 15% of the total of clusters. For example 73*.15=10.95=10 or 29*.15 = 4.35=4
   if(is.null(bootstrap.sample_size)){
     bootstrap.sample_size <- as.integer(number_of_clusters*0.15)
   }
 
   final_result <- NULL
-  for(counter in 1:bootstrap_number){
+  for(counter in 1:bootstrap.number){
 
     set.seed(Sys.time())
 
     #TODO create a generalization for other datasets without the requeriment of having a cluster_normalized vector
 
     #Create a list with the number of clusters
-    all_clusters <- c(1:number_of_clusters)
+    all_clusters <- cluster_numbers.list
     all_clusters <- all_clusters[all_clusters!=cluster_number]
 
     other_clusters <- paste0('cluster_', sample(all_clusters, bootstrap.sample_size, replace = F))
+    print(paste0('Random clusters:', paste(shQuote(other_clusters), collapse=", ")))
 
     its_well_calculated <- TRUE
-
+    markers.wilcox.bo <- NULL
+    print('before')
+    
+    
     result = tryCatch({
-      markers.wilcox <- FindMarkers(seurat_object, ident.1 = paste0("cluster_", cluster_number), ident.2 = other_clusters , only.pos = TRUE, logfc.threshold = LFC.lim)
+      markers.wilcox.bo <- FindMarkers(seurat_object, ident.1 = paste0("cluster_", cluster_number), ident.2 = other_clusters , only.pos = TRUE, logfc.threshold = LFC.lim)
     }, warning = function(w) {
       print(paste0("warning", w))
     }, error = function(e) {
@@ -1989,26 +2065,47 @@ bootstrap_gene_finder <- function(cluster_number, seurat_object, LFC.lim = 0.20,
     }, finally = {
     })
 
-    if(its_well_calculated & !is.null(markers.wilcox)){
-      #the p_val_adj could be 0 or less than 0.05 normally
-      filtered.wilcox <- markers.wilcox[markers.wilcox$p_val_adj <= min.p.adj_value & !is.na(markers.wilcox$p_val_adj) & markers.wilcox$avg_logFC >= 0.0 & !is.na(rownames(markers.wilcox)) & rownames(markers.wilcox) != 'NA',]
-      filtered.wilcox.genes <- rownames(markers.wilcox[markers.wilcox$p_val_adj < 0.05 & !is.na(rownames(markers.wilcox)) & rownames(markers.wilcox) != 'NA',])
+    if(its_well_calculated & !is.null(markers.wilcox.bo)){
+      print('into if its_well_calculated')
 
+     # print(paste0('is: ', is.null(markers.wilcox.bo), markers.wilcox.bo$p_val_adj))
+     # print(rownames(markers.wilcox.bo))
+      #print('after rownames')
+      
+      #save(markers.wilcox.bo, file = "/mnt_volumen/temporal_objects_R/markers.wilcox.bo.r")
+      
+      
+      result_markers = tryCatch({
+        #the p_val_adj could be 0 or less than 0.05 normally
+        filtered.wilcox <- markers.wilcox.bo[markers.wilcox.bo$p_val_adj <= min.p.adj_value & !is.na(markers.wilcox.bo$p_val_adj) & markers.wilcox.bo$avg_logFC >= 0.0 & !is.na(rownames(markers.wilcox.bo)) & rownames(markers.wilcox.bo) != 'NA',]
+      }, warning = function(w) {
+        print(paste0("warning result_markers", w))
+      }, error = function(e) {
+        print(paste0("error result_markers", e))
+        its_well_calculated <- FALSE
+      }, finally = {
+      })
+      
+     # print(markers.wilcox.bo)
+      
       #I get all new results
-      temporal_result <- rownames(filtered.wilcox)
+      temporal_result <- rownames(markers.wilcox.bo)
 
       #have the top N of genes
       if(length(temporal_result) >= maximo_genes & use_limit){
         temporal_result <- temporal_result[1:maximo_genes]
+      }else if(length(temporal_result)==0){
+        #nothing
       }else{
         temporal_result <- calculate_genes_using_dbscan(filtered.wilcox = filtered.wilcox)
       }
 
       final_result <- c(final_result, temporal_result)
       final_result <- unique(final_result)
+      print('after if its_well_calculated')
     }
   }
-
+  print('final result')
   final_result
 }
 
@@ -2024,7 +2121,7 @@ calculate_genes_using_dbscan <- function(filtered.wilcox, plot.dbscan.results = 
   library("dbscan")
   final_result <- NULL
 
-  print(paste0('markers with 0: ', nrow(markers.wilcox)))
+  print(paste0('markers with 0: ', nrow(filtered.wilcox)))
 
   if(nrow(filtered.wilcox)>0){
     # Compute DBSCAN using fpc package
