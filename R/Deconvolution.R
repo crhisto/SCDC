@@ -831,7 +831,7 @@ SCDC_prop_ONE <- function (bulk.eset, sc.eset, ct.varname, sample, truep = NULL,
 #' @param epsilon a small constant number used for convergence criteria
 #' @param weight.basis logical, use basis matrix adjusted by MVW, default is T.
 #' @param select.marker logical, select marker genes to perform deconvolution in tree-guided steps. Default is T.
-#' @param markers A set of marker gene that input manully to be used in deconvolution. If NULL, then
+#' @param markers A set of marker gene that input manually to be used in deconvolution. If NULL, then
 #' @param marker.varname variable name of cluster groups when selecting marker genes. If NULL, then use ct.varname.
 #' @param allgenes.fl logical, use all genes in the first-level deconvolution
 #' @param pseudocount.use a constant number used when selecting marker genes, default is 1.
@@ -846,7 +846,7 @@ SCDC_prop_subcl_marker <- function(bulk.eset, sc.eset, ct.varname, fl.varname, s
                                    select.marker = T, markers = NULL, marker.varname = NULL, allgenes.fl = F,
                                    pseudocount.use = 1, LFC.lim = 0.5, parallelize= F, core_number = NULL, fix_number_genes = NULL, marker_gene_strategy = 'boostrap_outliers',
                                    iteration.minimun_number_markers = 28, iteration.use_maximum = FALSE, iteration.maximo_genes = 35, iteration.use_final_foldchange = FALSE,
-                                   bootstrap.sample_size = NULL, bootstrap.number = NULL, additional_genes = NUL,...) {
+                                   bootstrap.sample_size = NULL, bootstrap.number = NULL, additional_genes = NULL,...) {
 
   sc.eset.orig <- sc.eset
 
@@ -1247,7 +1247,8 @@ SCDC_prop_subcl_marker <- function(bulk.eset, sc.eset, ct.varname, fl.varname, s
   return(list(prop.est = prop.est, prop.wt.fl = prop.wt.fl, basis.mvw = basis.mvw, peval = peval,
               sc.basis = sc.basis, sc.fl.basis = sc.fl.basis, 
               residual.list = residuals.list, residuals.by.sample.list = residuals_by_sample.list,
-              residuals_by_sample.list.fl = residuals_by_sample.list.fl))
+              residuals_by_sample.list.fl = residuals_by_sample.list.fl, 
+              cpm.xbulk = xbulk))
 }
 
 ############################################
