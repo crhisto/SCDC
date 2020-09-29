@@ -90,8 +90,11 @@ generateBulk_allcells <- function(eset, ct.varname, sample, disease = NULL, ct.s
   sample.id <- eset@phenoData@data[,sample]
   condition.id <- eset@phenoData@data[,disease]
 
+  print(paste0("Samples: ", unique(sample.id)))
+  list.unique <- unique(sample.id)
+
   ## expression
-  pseudo.exprs <- sapply(unique(sample.id), function(sid){
+  pseudo.exprs <- sapply(list.unique, function(sid){
     exprs.eset <- exprs(eset)
     print(paste0("Calculate exprs done.", sample.id, ", ", sid))
     y <- exprs.eset[, sample.id %in% sid]
