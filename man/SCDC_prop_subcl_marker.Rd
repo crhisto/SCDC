@@ -23,6 +23,17 @@ SCDC_prop_subcl_marker(
   allgenes.fl = F,
   pseudocount.use = 1,
   LFC.lim = 0.5,
+  parallelize = F,
+  core_number = NULL,
+  fix_number_genes = NULL,
+  marker_gene_strategy = "boostrap_outliers",
+  iteration.minimun_number_markers = 28,
+  iteration.use_maximum = FALSE,
+  iteration.maximo_genes = 35,
+  iteration.use_final_foldchange = FALSE,
+  bootstrap.sample_size = NULL,
+  bootstrap.number = NULL,
+  additional_genes = NULL,
   ...
 )
 }
@@ -53,7 +64,7 @@ SCDC_prop_subcl_marker(
 
 \item{select.marker}{logical, select marker genes to perform deconvolution in tree-guided steps. Default is T.}
 
-\item{markers}{A set of marker gene that input manully to be used in deconvolution. If NULL, then}
+\item{markers}{A set of marker gene that input manually to be used in deconvolution. If NULL, then}
 
 \item{marker.varname}{variable name of cluster groups when selecting marker genes. If NULL, then use ct.varname.}
 
@@ -62,6 +73,8 @@ SCDC_prop_subcl_marker(
 \item{pseudocount.use}{a constant number used when selecting marker genes, default is 1.}
 
 \item{LFC.lim}{a threshold of log fold change when selecting genes as input to perform Wilcoxon's test.}
+
+\item{iteration.use_final_foldchange}{TRUE/FALSE. If at the end the cluster has zero genes if this parameter is true, the boostraping is going to be calculated over the foldchange with <0.05, not with zero.}
 }
 \value{
 Estimated proportion, basis matrix, predicted gene expression levels for bulk samples

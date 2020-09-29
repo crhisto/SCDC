@@ -15,9 +15,11 @@ SCDC_qc(
   epsilon = 0.01,
   arow = NULL,
   qcthreshold = 0.7,
-  generate.figure = T,
+  generate.figure = F,
   cbPalette = c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2",
     "#D55E00", "#CC79A7"),
+  parallelize = F,
+  core_number = NULL,
   ...
 )
 }
