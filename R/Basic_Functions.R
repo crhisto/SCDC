@@ -92,7 +92,9 @@ generateBulk_allcells <- function(eset, ct.varname, sample, disease = NULL, ct.s
 
   ## expression
   pseudo.exprs <- sapply(unique(sample.id), function(sid){
-    y <- exprs(eset)[, sample.id %in% sid]
+    exprs.eset <- exprs(eset)
+    print(paste0("Calculate exprs done.", sample.id, ", ", sid))
+    y <- exprs.eset[, sample.id %in% sid]
     rowSums(y, na.rm = T)
   })
   colnames(pseudo.exprs) <- unique(sample.id)
