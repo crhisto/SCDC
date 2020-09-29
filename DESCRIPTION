@@ -29,6 +29,16 @@ Imports:
   ggplot2, 
   pheatmap,
   Biobase,
-  xbioc
+  xbioc,
+  pheatmap,
+  foreach,
+  doParallel,
+  Seurat,
+  fpc,
+  tidyverse,
+  fpc,
+  stringr,
+  dbscan,
+  slam
 LinkingTo: Rcpp
 Depends: R (>= 3.0.1)

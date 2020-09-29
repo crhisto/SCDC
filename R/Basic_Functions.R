@@ -12,7 +12,7 @@
 #' @param FUN function for apply to the X matrix
 #' @return Matrix resulted with the function applied to original X matrix
 #' @export
-library(slam)
+#library(slam)
 custom_apply <- function (X, MARGIN, FUN)
 {
   x_value <- as.simple_triplet_matrix(X)
@@ -57,7 +57,7 @@ getCPM0 <- function(x, verbose = F){
 #' @param fdata feature data, for genes, usually it's gene name
 #' @param pdata pheno data, for samples, usually it's the characteristics for each single cell/bulk sample, including name, gender, age, cluster, disease,...
 #' @export
-library(Biobase)
+#library(Biobase)
 getESET <- function(exprs, fdata, pdata){
   pdata <- as.data.frame(pdata)
   fdata <- as.data.frame(fdata)
