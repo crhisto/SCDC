@@ -11,6 +11,7 @@
 #' @param ct.varname variable name for 'cell types'
 #' @param sample variable name for subject/samples
 #' @return a list of basis matrix, sum of cell-type-specific library size, sample variance matrix, basis matrix by mvw, mvw matrix.
+#' @import Matrix
 #' @export
 SCDC_basis <- function(x, ct.sub = NULL, ct.varname, sample){
   # select only the subset of cell types of interest
@@ -20,7 +21,7 @@ SCDC_basis <- function(x, ct.sub = NULL, ct.varname, sample){
   ct.sub <- ct.sub[!is.na(ct.sub)]
   x.sub <- x[,x@phenoData@data[,ct.varname] %in% ct.sub]
   # qc: remove non-zero genes
-  x.sub <- x.sub[rowSums(exprs(x.sub)) > 0,]
+  x.sub <- x.sub[Matrix::rowSums(exprs(x.sub)) > 0,]
   # calculate sample mean & sample variance matrix: genes by cell types
   countmat <- exprs(x.sub)
   ct.id <- droplevels(as.factor(x.sub@phenoData@data[,ct.varname]))
@@ -314,7 +315,7 @@ SCDC_qc <- function (sc.eset, ct.varname, sample, scsetname = "Single Cell",
     heat.anno <- NULL
   }
 
-  prop.qc.keep <- rowSums(prop.qc > qcthreshold) ==1 # truncated values -> F or T
+  prop.qc.keep <- Matrix::rowSums(prop.qc > qcthreshold) ==1 # truncated values -> F or T
   sc.eset.qc <- sc.eset[,prop.qc.keep]
   return(list(prop.qc = prop.qc, sc.eset.qc = sc.eset.qc, heatfig = heat.anno))
 }
@@ -554,12 +555,13 @@ SCDC_qc_ONE <- function(sc.eset, ct.varname, sample, scsetname = "Single Cell",
 #' @param truep true cell-type proportions for bulk samples if known
 #' @param Transform_bisque The bulk sample transformation from bisqueRNA. Aiming to reduce the systematic difference between single cells and bulk samples.
 #' @return Estimated proportion, basis matrix, predicted gene expression levels for bulk samples
+#' @import Matrix
 #' @export
 SCDC_prop <- function (bulk.eset, sc.eset, ct.varname, sample, ct.sub, iter.max = 1000,
                        nu = 1e-04, epsilon = 0.01, truep = NULL, weight.basis = T,
                        Transform_bisque = F, ...)
 {
-  bulk.eset <- bulk.eset[rowSums(exprs(bulk.eset)) > 0, , drop = FALSE]
+  bulk.eset <- bulk.eset[Matrix::rowSums(exprs(bulk.eset)) > 0, , drop = FALSE]
   ct.sub <- intersect(ct.sub, unique(sc.eset@phenoData@data[,
                                                             ct.varname]))
   sc.basis <- SCDC_basis(x = sc.eset, ct.sub = ct.sub, ct.varname = ct.varname,
@@ -589,7 +591,7 @@ SCDC_prop <- function (bulk.eset, sc.eset, ct.varname, sample, ct.sub, iter.max 
     }
     sc.ref <- GenerateSCReference(sc.eset, cell.types)[genes, , drop = F]
     ncount <- table(sc.eset@phenoData@data[, sample], sc.eset@phenoData@data[, ct.varname])
-    true.prop <- ncount/rowSums(ncount, na.rm = T)
+    true.prop <- ncount/Matrix::rowSums(ncount, na.rm = T)
     sc.props <- round(true.prop[complete.cases(true.prop), ], 2)
     Y.train <- sc.ref %*% t(sc.props[, colnames(sc.ref)])
     dim(Y.train)
@@ -839,6 +841,7 @@ SCDC_prop_ONE <- function (bulk.eset, sc.eset, ct.varname, sample, truep = NULL,
 #' @param truep true cell-type proportions for bulk samples if known
 #' @param iteration.use_final_foldchange TRUE/FALSE. If at the end the cluster has zero genes if this parameter is true, the boostraping is going to be calculated over the foldchange with <0.05, not with zero.
 #' @return Estimated proportion, basis matrix, predicted gene expression levels for bulk samples
+#' @import Matrix
 #' @export
 SCDC_prop_subcl_marker <- function(bulk.eset, sc.eset, ct.varname, fl.varname, sample,
                                    ct.sub = NULL, ct.fl.sub, iter.max = 3000, nu = 1e-04, epsilon = 0.001,
@@ -855,7 +858,7 @@ SCDC_prop_subcl_marker <- function(bulk.eset, sc.eset, ct.varname, fl.varname, s
   }
   ct.sub <- ct.sub[!is.na(ct.sub)]
   ct.fl.sub <- ct.fl.sub[!is.na(ct.fl.sub)]
-  bulk.eset <- bulk.eset[rowSums(exprs(bulk.eset))>0, , drop = FALSE]
+  bulk.eset <- bulk.eset[Matrix::rowSums(exprs(bulk.eset))>0, , drop = FALSE]
   sc.eset <- sc.eset[,sc.eset@phenoData@data[,ct.varname] %in% ct.sub]
   message('SCDC basis for main cluster...')
   gc()

@@ -135,12 +135,13 @@ generateBulk_allcells <- function(eset, ct.varname, sample, disease = NULL, ct.s
 #' @param nbulk number of pseudo bulk samples to be constructed
 #' @param samplewithRep logical, randomly sample single cells with replacement. Default is F.
 #' @return pseudo bulk samples ExpressionSet, and actual cell-type proportions
+#' @import Matrix
 #' @export
 generateBulk_norep <- function(eset, ct.varname, sample, disease = NULL, ct.sub,
                                prop_mat = NULL, nbulk=10, samplewithRep = F){
   x.sub <- eset[,eset@phenoData@data[,ct.varname] %in% ct.sub]
   # qc: remove non-zero genes
-  x.sub <- x.sub[rowSums(exprs(x.sub)) > 0,]
+  x.sub <- x.sub[Matrix::rowSums(exprs(x.sub)) > 0,]
   # calculate sample mean & sample variance matrix: genes by cell types
   ct.id <- droplevels(as.factor(x.sub@phenoData@data[,ct.varname]))
   sample.id <- x.sub@phenoData@data[,sample]
@@ -220,13 +221,13 @@ generateBulk_norep <- function(eset, ct.varname, sample, disease = NULL, ct.sub,
           if (is.null(dim(temp.mat))){
             temp.sum <- temp.mat
           } else {
-            temp.sum <- rowSums(temp.mat, na.rm = T) # expression sum for one cell type in this bulk, need to sum up all types.
+            temp.sum <- Matrix::rowSums(temp.mat, na.rm = T) # expression sum for one cell type in this bulk, need to sum up all types.
           }
         }
       }
     })
 
-    out = rowSums(temp.b1)
+    out = Matrix::rowSums(temp.b1)
     pseudo_bulk <- cbind(pseudo_bulk, out)
 
     #convert to sparse matrix
@@ -247,9 +248,9 @@ generateBulk_norep <- function(eset, ct.varname, sample, disease = NULL, ct.sub,
   pseudo_eset <- ExpressionSet(pseudo_bulk,
                                AnnotatedDataFrame(pseudo_pdata),
                                AnnotatedDataFrame(pseudo_fdata))
-  pseudo_eset0 <- pseudo_eset[,rowSums(!is.na(true.p1))>0] #non-zero eset
-  true.p0 <- true.p1[rowSums(!is.na(true.p1))>0,]
-  true.ct0 <- true.ct[rowSums(!is.na(true.p1))>0,]
+  pseudo_eset0 <- pseudo_eset[,Matrix::rowSums(!is.na(true.p1))>0] #non-zero eset
+  true.p0 <- true.p1[Matrix::rowSums(!is.na(true.p1))>0,]
+  true.ct0 <- true.ct[Matrix::rowSums(!is.na(true.p1))>0,]
   return(list(true_p = true.p1, pseudo_bulk = pseudo_bulk, pseudo_eset = pseudo_eset,
               num.real = true.ct, true_p0 = true.p0, true.ct0 = true.ct0, pseudo_eset0 = pseudo_eset0)) # , entropy = entropy
 }
@@ -269,7 +270,7 @@ getSearchGrid <- function(lengthby, nparam){
     wlist[[i]] <- seq(0,1+lengthby,by = lengthby)
   }
   w1grid <- round(expand.grid(wlist),digits = 2) # without the round function, there's missing combinations
-  w1grid <- w1grid[round(rowSums(w1grid), digits = 2)==1.00,]
+  w1grid <- w1grid[round(Matrix::rowSums(w1grid), digits = 2)==1.00,]
   colnames(w1grid) <- paste("w",1:nparam, sep = "")
   return(w1grid)
 }
