@@ -96,12 +96,12 @@ generateBulk_allcells <- function(eset, ct.varname, sample, disease = NULL, ct.s
   ## expression
   pseudo.exprs <- sapply(unique(sample.id), function(sid){
     y <- exprs(eset)[, sample.id %in% sid]
-    rowSums(y, na.rm = T)
+    Matrix::rowSums(y, na.rm = T)
   })
   colnames(pseudo.exprs) <- unique(sample.id)
   ## true proportion: sample by cell types
   ncount <- table(sample.id, cluster.id)
-  true.prop <- ncount / rowSums(ncount, na.rm = T)
+  true.prop <- ncount / Matrix::rowSums(ncount, na.rm = T)
   true.prop <- true.prop[complete.cases(true.prop),]
   ## eset for pseudo bulk sample
   if (is.null(disease)){
