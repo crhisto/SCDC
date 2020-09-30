@@ -80,6 +80,8 @@ getESET <- function(exprs, fdata, pdata){
 #' @param disease indicate the health condition of subjects
 #' @param ct.sub a subset of cell types that are selected to construct pseudo bulk samples. If NULL, then all cell types are used.
 #' @return pseudo bulk samples ExpressionSet, and actual cell-type proportions
+#' @import Biobase
+#' @import xbioc
 #' @export
 generateBulk_allcells <- function(eset, ct.varname, sample, disease = NULL, ct.sub = NULL){
   if (is.null(ct.sub)){
