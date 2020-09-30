@@ -11,10 +11,13 @@
 #' @param MARGIN  1 for rows, 2 for columns
 #' @param FUN function for apply to the X matrix
 #' @return Matrix resulted with the function applied to original X matrix
+#' @import slam
+#' @import Matrix
 #' @export
 #library(slam)
 custom_apply <- function (X, MARGIN, FUN)
 {
+  library(Matrix)
   x_value <- as.simple_triplet_matrix(X)
 
   if(MARGIN==1){
@@ -32,8 +35,10 @@ custom_apply <- function (X, MARGIN, FUN)
 #' @description Normalize matrix by column or normalize a vector
 #' @name getCPM0
 #' @param x a matrix or a vector
+#' @import Matrix
 #' @export
 getCPM0 <- function(x, verbose = F){
+  library(Matrix)
   if (is.null(dim(x))){
     if (verbose){
       message("Normalizing a vector instead of a matrix")
