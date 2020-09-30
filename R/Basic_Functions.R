@@ -14,7 +14,6 @@
 #' @import slam
 #' @import Matrix
 #' @export
-#library(slam)
 custom_apply <- function (X, MARGIN, FUN)
 {
   x_value <- as.simple_triplet_matrix(X)
@@ -50,7 +49,6 @@ getCPM0 <- function(x, verbose = F){
   }
 }
 
-
 #######################################################
 #' Get ExpressionSet
 #' @description Use Pdata, Fdata, and count matrix to derive ExpressionSet Object
@@ -59,12 +57,11 @@ getCPM0 <- function(x, verbose = F){
 #' @param exprs raw count matrix
 #' @param fdata feature data, for genes, usually it's gene name
 #' @param pdata pheno data, for samples, usually it's the characteristics for each single cell/bulk sample, including name, gender, age, cluster, disease,...
+#' @import Biobase
 #' @export
-#library(Biobase)
 getESET <- function(exprs, fdata, pdata){
   pdata <- as.data.frame(pdata)
   fdata <- as.data.frame(fdata)
-  #exprs <- as.matrix(exprs)
   exprs <- Matrix(exprs, sparse = TRUE)
   rownames(pdata) <- colnames(exprs)
   rownames(fdata) <- rownames(exprs)
@@ -123,7 +120,6 @@ generateBulk_allcells <- function(eset, ct.varname, sample, disease = NULL, ct.s
                          pdata = pseudo.pdata)
   return(list(truep = true.prop, pseudo_eset = pseudo_eset))
 }
-
 
 ######################################################
 #' Construct Pseudo bulk samples -- random
@@ -258,9 +254,6 @@ generateBulk_norep <- function(eset, ct.varname, sample, disease = NULL, ct.sub,
               num.real = true.ct, true_p0 = true.p0, true.ct0 = true.ct0, pseudo_eset0 = pseudo_eset0)) # , entropy = entropy
 }
 
-
-
-
 #' Grid search matrix
 #' @description Generate Grid-search matrix
 #' @name getSearchGrid
@@ -382,10 +375,6 @@ SCDC_yeval <- function(y, yest, yest.names=NULL){
   evals <- lapply(yest, function(xx){
     if (!is.null(xx)){
       if (dim(xx)[2] >1){
-        #save(y, file="/mnt_volumen/datasets/public/brain/split-seq_paper/y_SCDC.Rdata")
-        #save(yest, file="/mnt_volumen/datasets/public/brain/split-seq_paper/yest_SCDC.Rdata")
-        #save(xx, file="/mnt_volumen/datasets/public/brain/split-seq_paper/xx_SCDC.Rdata")
-
         g.use = intersect(rownames(y), rownames(xx))
         y.norm <- getCPM0(y[g.use,])
         x = xx[g.use,colnames(y)]
@@ -395,9 +384,6 @@ SCDC_yeval <- function(y, yest, yest.names=NULL){
         yest.norm <- as.matrix(yest.norm)
         y.norm <- as.matrix(y.norm)
 
-        #View(g.use)
-        #View(y.norm)
-        #View(yest.norm)
         spearmany <-round(cor(c(yest.norm), c(y.norm), method = "spearman"), digits = 5)
         RMSDy = round(sqrt(mean((yest.norm - y.norm)^2)), digits = 7)
         mADy = round(mean(abs(yest.norm - y.norm)), digits = 8)
@@ -462,7 +448,6 @@ SCDC_yeval <- function(y, yest, yest.names=NULL){
               RMSDy.sample.table = RMSDy.sample.table, mADy.sample.table = mADy.sample.table))
 }
 
-
 ###############################################
 #' Calculate cell type proportions by suggested weights
 #' @description Calculate proportions by linear combination of a list of proportions
@@ -499,7 +484,6 @@ wt_y <- function(wt, y.list = y.list){
   combo.y <- Reduce("+", combo.list)
   return(combo.y)
 }
-
 
 ###############################################
 #' Create user-defined SCDC_prop object, as the SCDC_ENSEMBLE input

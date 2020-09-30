@@ -1,4 +1,4 @@
-############### VISUALIZTION FUNCTIONS #######################
+############### VISUALIZATION FUNCTIONS #######################
 ##############################################################
 #' Demographic figure for single cells
 #' @description Create a demographic figure for the input single cell dataset for each of the subject
@@ -62,7 +62,6 @@ wheat_map <- function(ensemble_res, ref1, ref2){
   pp <- ggplot( ensemble_res$gridres, aes(w1, w2, fill = Pearson)) +
     geom_tile(aes(fill = Pearson)) + #, colour = "white",size=0
     scale_fill_gradient(low = "#56B4E9", high = "#E69F00", name = "Pearson's R(prop)") +
-    # xlab(paste("Weight for", ref1))+
     ylab(paste("Weight for", ref2)) +
     annotate(geom="text", x=mean(ensemble_res$gridres$w1[ensemble_res$gridres$Pearson == max(ensemble_res$gridres$Pearson)]),
              y=mean(ensemble_res$gridres$w2[ensemble_res$gridres$Pearson == max(ensemble_res$gridres$Pearson)]),
@@ -77,8 +76,6 @@ wheat_map <- function(ensemble_res, ref1, ref2){
   ps <- ggplot( ensemble_res$gridres, aes(w1, w2, fill = spearman_Y)) +
     geom_tile(aes(fill = spearman_Y) ) +
     scale_fill_gradient(low = "#56B4E9", high = "#E69F00", name = "Spearman's R(Y)") +
-    # xlab(paste("Weight for", ref1))+
-    # ylab(paste("Weight for", ref2)) +
     annotate(geom="text", x=mean(ensemble_res$gridres$w1[ensemble_res$gridres$spearman_Y==max(ensemble_res$gridres$spearman_Y)]),
              y=mean(ensemble_res$gridres$w2[ensemble_res$gridres$spearman_Y==max(ensemble_res$gridres$spearman_Y)]),
              label="*",
@@ -108,7 +105,6 @@ wheat_map <- function(ensemble_res, ref1, ref2){
     geom_tile(aes(fill = RMSD_Y) ) +
     scale_fill_gradient(low = "#009E73", high = "#56B4E9", name = "RMSD(Y)") +
     xlab(paste("Weight for", ref1))+
-    # ylab(paste("Weight for", ref2)) +
     annotate(geom="text", x=mean(ensemble_res$gridres$w1[ensemble_res$gridres$RMSD_Y == min(ensemble_res$gridres$RMSD_Y)]),
              y=mean(ensemble_res$gridres$w2[ensemble_res$gridres$RMSD_Y == min(ensemble_res$gridres$RMSD_Y)]),
              label="*",
@@ -122,6 +118,5 @@ wheat_map <- function(ensemble_res, ref1, ref2){
   pout <- plot_grid(pp, ps, pm, pr, ncol = 2)
   return(pout)
 }
-
 
 ################################################

@@ -168,8 +168,6 @@ SCDC_ENSEMBLE <- function(bulk.eset, sc.eset.list = NULL, ct.varname, sample,
     w_spearman <- gridmat[which.max(search.y[,4]),]
   }
 
-
-
   # ----------------------------------------------
   # summarize all weights and performances
   if (!is.null(truep)){

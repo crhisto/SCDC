@@ -135,7 +135,6 @@ SCDC_basis_ONE <- function(x , ct.sub = NULL, ct.varname, sample){
   x.sub <- x.sub[rowSums(exprs(x.sub)) > 0,]
   # calculate sample mean & sample variance matrix: genes by cell types
   countmat <- exprs(x.sub)
-  # ct.id <- droplevels(as.factor(x.sub@phenoData@data[,ct.varname]))
   ct.id <- x.sub@phenoData@data[,ct.varname]
   sample.id <- x.sub@phenoData@data[,sample]
   ct_sample.id <- paste(ct.id,sample.id, sep = '%')
@@ -160,7 +159,6 @@ SCDC_basis_ONE <- function(x , ct.sub = NULL, ct.varname, sample){
   basis <- sapply(unique(mean.id[,1]), function(id){
     z <- sum.mat[mean.id[,1]]
     mean.mat.z <- t(t(mean.mat)*z)
-    # id = unique(mean.id[,1])[1]
     y = as.matrix(mean.mat.z[,mean.id[,1] %in% id])
     apply(y,1,mean, na.rm = TRUE)
   })
@@ -230,6 +228,7 @@ SCDC_basis_ONE <- function(x , ct.sub = NULL, ct.varname, sample){
 #' @param qcthreshold the probability threshold used to filter out questionable cells
 #' @param generate.figure logical. If generate the heatmap by pheatmap or not. default is TRUE.
 #' @return a list including: 1) a probability matrix for each single cell input; 2) a clustering QCed ExpressionSet object; 3) a heatmap of QC result.
+#' @import pheatmap
 #' @export
 SCDC_qc <- function (sc.eset, ct.varname, sample, scsetname = "Single Cell",
                    ct.sub, iter.max = 1000, nu = 1e-04, epsilon = 0.01, arow =NULL,
@@ -300,12 +299,10 @@ SCDC_qc <- function (sc.eset, ct.varname, sample, scsetname = "Single Cell",
     prop.qc <- qc_iteration_parallelized(m.basis, xsc, sigma, N.sc, nu, epsilon, iter.max, core_number)
   }
 
-
   # name col and row
   colnames(prop.qc) <- colnames(m.basis)
   rownames(prop.qc) <- colnames(xsc)
   if (generate.figure){
-    #library(pheatmap)
     heat.anno <- pheatmap(prop.qc, annotation_row = arow,
                           annotation_names_row=FALSE, show_rownames = F,
                           annotation_names_col=FALSE, cutree_rows = length(ct.sub),
@@ -321,26 +318,25 @@ SCDC_qc <- function (sc.eset, ct.varname, sample, scsetname = "Single Cell",
 }
 
 ############################################
-#' Paralellization of the for procedure for QC process
+#' Paralellization for the QC process
 #' @description
-#' @name iteration_over_clusters_parallelized
-#' @param m.basis
-#' @param xsc
-#' @param N.sc
+#' @name qc_iteration_parallelized
+#' @param m.basis Object with the basis.mvw.
+#' @param xsc CPM object of the single cell dataset
+#' @param N.sc  Object with the column list of the single cell dataset
 #' @param nu a small constant to facilitate the calculation of variance
 #' @param epsilon a small constant number used for convergence criteria
 #' @param iter.max the maximum number of iteration in WNNLS
 #' @param core_number Number of cores that the processors uses, for default uses # processors -1
-#' @return
+#' @return a list including: 1) a probability matrix for each single cell input; 2) a clustering QCed ExpressionSet object; 3) a heatmap of QC result.
+#' @import foreach
+#' @import doParallel
 #' @export
 qc_iteration_parallelized <- function(m.basis, xsc, sigma, N.sc, nu, epsilon, iter.max, core_number = NULL, ...){
 
   gc()
 
   print('Executing parallelized function...')
-
-  #library(foreach)
-  #library(doParallel)
 
   if(is.null(core_number)){
     # Calculate the number of cores
@@ -437,7 +433,6 @@ qc_iteration_parallelized <- function(m.basis, xsc, sigma, N.sc, nu, epsilon, it
   gc()
   prop.qc
 }
-
 
 #################################
 #' Clustering QC for single cells from one subject
@@ -832,14 +827,24 @@ SCDC_prop_ONE <- function (bulk.eset, sc.eset, ct.varname, sample, truep = NULL,
 #' @param nu a small constant to facilitate the calculation of variance
 #' @param epsilon a small constant number used for convergence criteria
 #' @param weight.basis logical, use basis matrix adjusted by MVW, default is T.
+#' @param truep true cell-type proportions for bulk samples if known
 #' @param select.marker logical, select marker genes to perform deconvolution in tree-guided steps. Default is T.
 #' @param markers A set of marker gene that input manually to be used in deconvolution. If NULL, then
 #' @param marker.varname variable name of cluster groups when selecting marker genes. If NULL, then use ct.varname.
 #' @param allgenes.fl logical, use all genes in the first-level deconvolution
 #' @param pseudocount.use a constant number used when selecting marker genes, default is 1.
 #' @param LFC.lim a threshold of log fold change when selecting genes as input to perform Wilcoxon's test.
-#' @param truep true cell-type proportions for bulk samples if known
+#' @param parallelize Parameter that enable the use of multiples threads in the process. Default is F.
+#' @param core_number  Number of cores that will be used for the process.
+#' @param fix_number_genes Maximum number of marker genes that has to be returned by cluster
+#' @param marker_gene_strategy There are three different implementation of marker gene function including the original: 1.Default, 2.default_improved, 3.wilcox_outlier and 4.boostrap_outliers
+#' @param iteration.minimun_number_markers Minimum number of marker genes for each cell type
+#' @param iteration.use_maximum Logical. Activate the filter the maximum number of marker genes for each cell type. Default F.
+#' @param iteration.maximo_genes Maximum number of marker genes for each cell type.
 #' @param iteration.use_final_foldchange TRUE/FALSE. If at the end the cluster has zero genes if this parameter is true, the boostraping is going to be calculated over the foldchange with <0.05, not with zero.
+#' @param bootstrap.sample_size Number of cell types that will be processed in each boostraping sampling.
+#' @param bootstrap.number Number of boostraping samples for each cell type.
+#' @param additional_genes Genes that will be added to the marker genes and will be utilized in the NNMF process.
 #' @return Estimated proportion, basis matrix, predicted gene expression levels for bulk samples
 #' @import Matrix
 #' @export
@@ -847,7 +852,7 @@ SCDC_prop_subcl_marker <- function(bulk.eset, sc.eset, ct.varname, fl.varname, s
                                    ct.sub = NULL, ct.fl.sub, iter.max = 3000, nu = 1e-04, epsilon = 0.001,
                                    weight.basis = T, truep = NULL,
                                    select.marker = T, markers = NULL, marker.varname = NULL, allgenes.fl = F,
-                                   pseudocount.use = 1, LFC.lim = 0.5, parallelize= F, core_number = NULL, fix_number_genes = NULL, marker_gene_strategy = 'boostrap_outliers',
+                                   pseudocount.use = 1, LFC.lim = 0.5, parallelize = F, core_number = NULL, fix_number_genes = NULL, marker_gene_strategy = 'boostrap_outliers',
                                    iteration.minimun_number_markers = 28, iteration.use_maximum = FALSE, iteration.maximo_genes = 35, iteration.use_final_foldchange = FALSE,
                                    bootstrap.sample_size = NULL, bootstrap.number = NULL, additional_genes = NULL,...) {
 
@@ -877,6 +882,7 @@ SCDC_prop_subcl_marker <- function(bulk.eset, sc.eset, ct.varname, fl.varname, s
 
     global.min.LFC <- 0
     global.genes.diff.LFC_max.top.cluster <- 0
+
     #this should be parametric and corresponds to the minimun number of markers on each cluster
     top_genes <- 20
 
@@ -1241,6 +1247,7 @@ SCDC_prop_subcl_marker <- function(bulk.eset, sc.eset, ct.varname, fl.varname, s
 #' @param file_path  Path in the server to save the file
 #' @param file_name Name of the file to be saved
 #' @param message1 Message # 1 to be saved
+#' @param message1 Message # 2 to be saved
 #' @export
 save_log_file <- function(file_path, file_name, message1, message2){
   file_name_path <- paste0(file_path, '/', file_name)
@@ -1248,15 +1255,17 @@ save_log_file <- function(file_path, file_name, message1, message2){
 }
 
 ############################################
-#' parallelization of the for the original procedure with some additional lines for:
-#' @description  parallelization of the for the original procedure with some additional lines for: 1. Show the selected genes. 2. Add parallelization. 3. Add logging function in a temporal file.
+#' Parallelization of the original procedure with some additional lines for:
+#' @description  Parallelization of the original procedure with some additional lines for: 1.Show the selected genes. 2.Add parallelization. 3.Add logging function in a temporal file.
 #' @name iteration_over_clusters_default_parallelized
 #' @param ct.group  List of clusters that will be analyzed
 #' @param LFC.lim Foldchange limit for the comparison between each cluster amoung the others
 #' @param sc.eset ExpressionSet object for single cells
-#' @param pseudocount.use
+#' @param pseudocount.use  A constant number used when selecting marker genes, default is 1.
 #' @param core_number Number of cores that will be used for the process.
 #' @return List with the marker genes for all selected clusters
+#' @import foreach
+#' @import doParallel
 #' @export
 iteration_over_clusters_default_parallelized <- function(ct.group, LFC.lim, sc.eset, pseudocount.use, core_number = NULL,  ...){
 
@@ -1264,9 +1273,6 @@ iteration_over_clusters_default_parallelized <- function(ct.group, LFC.lim, sc.e
   countmat <- exprs(sc.eset)
 
   print('Executing parallelized function...')
-
-  #library(foreach)
-  #library(doParallel)
 
   if(is.null(core_number)){
     # Calculate the number of cores
@@ -1379,10 +1385,12 @@ iteration_over_clusters_default_parallelized <- function(ct.group, LFC.lim, sc.e
 #' @param LFC.lim a threshold of log fold change when selecting genes as input to perform Wilcoxon's test.
 #' @param sc.eset ExpressionSet object for single cells
 #' @param top_genes Number of top genes that we want to consider to check the maximum LFC for each cluster. This is just for informative purposes.
-#' @param pseudocount.use
+#' @param pseudocount.use A constant number used when selecting marker genes, default is 1.
 #' @param core_number Number of cores that will be used for the process.
 #' @param fix_number_genes  Maximum number of marker genes that has to be returned by cluster
 #' @return List with the marker genes for all selected clusters
+#' @import foreach
+#' @import doParallel
 #' @export
 iteration_over_clusters_parallelized <- function(ct.group, LFC.lim, sc.eset, top_genes, pseudocount.use, core_number = NULL, fix_number_genes = NULL,  ...){
 
@@ -1394,9 +1402,6 @@ iteration_over_clusters_parallelized <- function(ct.group, LFC.lim, sc.eset, top
   global.genes.diff.LFC_max.top.cluster <- 0
 
   print('Executing parallelized function...')
-
-  #library(foreach)
-  #library(doParallel)
 
   if(is.null(core_number)){
     # Calculate the number of cores
@@ -1473,13 +1478,10 @@ iteration_over_clusters_parallelized <- function(ct.group, LFC.lim, sc.eset, top
     }
     ##########    ##########    ##########
 
-
-
     #We got the top N values (top_genes)
     genes.diff.LFC_max.top.cluster <- min(tail(sort(group.1 - group.2),top_genes))
 
     count.use <- countmat[rownames(sc.eset) %in% genes.diff,]
-
 
     #in order to check the global maximum value of LFC that it should be configured
     if(genes.diff.LFC_max < global.min.LFC | global.min.LFC==0){
@@ -1543,7 +1545,6 @@ iteration_over_clusters_parallelized <- function(ct.group, LFC.lim, sc.eset, top
       message3 <- paste0("Markers GENES with P-VALUE-ADJ=0:(",nrow(genes_filtered), ", min-FC:" , min(genes_filtered$LFC) , ", max-FC:" ,max(genes_filtered$LFC) ,  "): ", paste(shQuote(genes_filtered$gene_name), collapse=", "))
       message1 <- paste0(message1, '\n', message3)
       ###########################checking how many genes filtering p-value-adjusted=0
-
 
       top_markers.temp <- NULL
 
@@ -1610,7 +1611,6 @@ iteration_over_clusters_parallelized <- function(ct.group, LFC.lim, sc.eset, top
   markers.wilcox
 }
 
-
 ############################################
 #' Marker gene selection with parallelization using wilcox method from the Seurat library
 #' @description  Marker gene selection with parallelization using wilcox method from the Seurat library
@@ -1625,26 +1625,25 @@ iteration_over_clusters_parallelized <- function(ct.group, LFC.lim, sc.eset, top
 #' @param minimum_p_val_adj p-value-adjusted for the wilcox process. Could be zero or 0.05
 #' @param maximo_genes  If we want to limitate the maximum number of marker genes at the end of the process.
 #' @return List with the marker genes for all selected clusters
+#' @import foreach
+#' @import doParallel
+#' @import Seurat
+#' @import fpc
+#' @import tidyverse
 #' @export
-iteration_over_clusters_parallelized_wilcox_outlier <- function(sc.eset, ct.group, core_number = NULL, LFC.lim=0.20,  minimun_number_markers = 20, minimum_genes_pipeline = TRUE,
-                                                                add_zero_p_val_adj = TRUE, minimum_p_val_adj=0, maximo_genes=20,...){
+iteration_over_clusters_parallelized_wilcox_outlier <- function(sc.eset, ct.group, core_number = NULL, LFC.lim = 0.20,  minimun_number_markers = 20, minimum_genes_pipeline = TRUE,
+                                                                add_zero_p_val_adj = TRUE, minimum_p_val_adj = 0, maximo_genes = 20,...){
 
   gc()
 
   pbmc <- CreateSeuratObject(counts = sc.eset@assayData$exprs,
-                                          project = "Deconvolution_bulk_brain_data",
+                                          project = "Deconvolution_bulk_data",
                                           assay = "RNA")
 
   Idents(pbmc) <- sc.eset$cluster_normalized
   cells_by_cluster <- as.matrix(table(Idents(pbmc)))
 
   print('Executing parallelized function...')
-
-  #library(foreach)
-  #library(doParallel)
-  #library(Seurat)
-  #library(fpc)
-  #library(tidyverse)
 
   if(is.null(core_number)){
     # Calculate the number of cores
@@ -1748,7 +1747,6 @@ iteration_over_clusters_parallelized_wilcox_outlier <- function(sc.eset, ct.grou
 
     #For checking the genes selected as markers for an specific cluster
     save_log_file(temporal_directory, paste0(cluster_name,'.log'), message1, message2)
-    print(paste0(message1, ' ', message2))
 
     markers.temp
   }
@@ -1789,11 +1787,20 @@ iteration_over_clusters_parallelized_wilcox_outlier <- function(sc.eset, ct.grou
 #' @param ct.group  List of clusters that will be analyzed
 #' @param core_number Number of cores that will be used for the process.
 #' @param LFC.lim Fa threshold of log fold change when selecting genes as input to perform Wilcoxon's test.
+#' @param iteration.minimun_number_markers  Minimum number of marker genes for each cell type
+#' @param iteration.use_maximum  Logical. Activate the filter the maximum number of marker genes for each cell type. Default T.
+#' @param iteration.maximo_genes Maximum number of marker genes for each cell type at the end of the process.
 #' @param minimun_number_markers  If in the first step with the wilcox text there are at least this genes, the process is not going to use outlier detection with dbscan
 #' @param use_maximum  TRUE/FALSE. If the process selects just a fixed number of genes.
 #' @param iteration.use_final_foldchange TRUE/FALSE. If at the end the cluster has zero genes if this parameter is true, the boostraping is going to be calculated over the foldchange with <0.05, not with zero.
-#' @param maximo_genes  If we want to limitate the maximum number of marker genes at the end of the process.
+#' @param bootstrap.sample_size Number of cell types that will be processed in each boostraping sampling.
+#' @param bootstrap.number Number of boostraping samples for each cell type.
 #' @return List with the marker genes for all selected clusters
+#' @import Seurat
+#' @import foreach
+#' @import doParallel
+#' @import fpc
+#' @import stringr
 #' @export
 iteration_over_clusters_parallelized_wilcox_boostrap <- function(sc.eset, ct.group, core_number = NULL, LFC.lim = 0.20,
                                                                  iteration.minimun_number_markers = 28, iteration.use_maximum = TRUE, iteration.maximo_genes = 35, iteration.use_final_foldchange = FALSE,
@@ -1802,19 +1809,15 @@ iteration_over_clusters_parallelized_wilcox_boostrap <- function(sc.eset, ct.gro
   print(paste0('Parameters for iteration: ', "iteration.minimun_number_markers:", iteration.minimun_number_markers, ", iteration.use_maximum:", iteration.use_maximum, " iteration.maximo_genes:", iteration.maximo_genes))
 
   gc()
-  #library(Seurat)
+
   seurat_object <- CreateSeuratObject(counts = sc.eset@assayData$exprs,
-                             project = "Deconvolution_bulk_brain_data",
+                             project = "Deconvolution_bulk_data",
                              assay = "RNA")
 
   Idents(seurat_object) <- sc.eset$cluster_normalized
   cells_by_cluster <- as.matrix(table(Idents(seurat_object)))
 
   print('Executing parallelized function...')
-
-  #library(foreach)
-  #library(doParallel)
-  #library(fpc)
 
   if(is.null(core_number)){
     # Calculate the number of cores
@@ -1854,13 +1857,8 @@ iteration_over_clusters_parallelized_wilcox_boostrap <- function(sc.eset, ct.gro
       set.seed(Sys.time())
 
       gc()
-      #library(stringr)
       cluster_name <- ct.group.final[u]
       cluster_number <- as.numeric(str_remove(cluster_name, 'cluster_'))
-
-      #delete after debug
-      #cluster_name <- 'cluster_8'
-      #cluster_number <- 8
 
       #calculate number of cell for the cluster
       number_cells <- as.numeric(cells_by_cluster[rownames(cells_by_cluster)==cluster_name,])
@@ -1870,45 +1868,33 @@ iteration_over_clusters_parallelized_wilcox_boostrap <- function(sc.eset, ct.gro
       message2 <- ''
 
       message1 <- (paste0('Cluster: ', cluster_name, ' Number of cells: ', number_cells))
-      print(message1)
-      print('sis is')
 
       markers.wilcox.int <- NULL
       check_boostrap = F
 
       if(number_cells <= 3){
         message1 <- paste0(message1, '\n', "The cluster ", cluster_name ," doesn't have enough cells: ", number_cells)
-        print(message1)
         check_boostrap = FALSE
       }else{
-        print('after else')
         its_well_calculated <- TRUE
 
         result = tryCatch({
           markers.wilcox.int <- FindMarkers(seurat_object, ident.1 = cluster_name, ident.2 = NULL, only.pos = TRUE, logfc.threshold = LFC.lim, verbose = F)
         }, warning = function(w) {
-          print(paste0("warning", w))
+          print(paste0("Warning: ", w))
         }, error = function(e) {
-          print(paste0("error", e))
+          print(paste0("Error: ", e))
           its_well_calculated <- FALSE
         }, finally = {
         })
 
-        print(paste0('after catch', nrow(markers.wilcox.int), its_well_calculated))
-
         if(its_well_calculated & !is.null(markers.wilcox.int)){
 
-          print('in first if its_well_calculated and is.null(markers.wilcox.int)')
-
-
           markers.wilcox.filtered <- markers.wilcox.int[markers.wilcox.int$p_val_adj == 0 & !is.na(markers.wilcox.int$p_val_adj) & !is.na(rownames(markers.wilcox.int)) & rownames(markers.wilcox.int) != 'NA',]
-          print('Number 2')
           markers.temp <- rownames(markers.wilcox.filtered)
 
           #for checking progress for each cluster
           message1 <- paste0(message1, '\n', cluster_name, "(", length(markers.temp), ') -> Number of cells: ', number_cells, ' *****Genes: ', paste(shQuote(markers.temp), collapse=", "))
-          print(message1)
-          print('It has to print before: ')
 
           #add other markers with boostrap
           if(nrow(markers.wilcox.filtered) <= iteration.minimun_number_markers){
@@ -1921,26 +1907,19 @@ iteration_over_clusters_parallelized_wilcox_boostrap <- function(sc.eset, ct.gro
         }
       }
 
-      print(paste0('check_boostrap', check_boostrap))
-
       if(check_boostrap){
         #call the analizer
-        print('check_boostrap')
         bootstrap_genes = bootstrap_gene_finder(cluster_number, seurat_object, bootstrap.sample_size = bootstrap.sample_size, bootstrap.number = bootstrap.number)
         message1 <- paste0(message1, '\n', 'Boostrap generation: ', "(", length(bootstrap_genes), ') -> Number of cells: ', number_cells, '. *****Genes: ', paste(shQuote(bootstrap_genes), collapse=", "))
-        print(message1)
         markers.temp <- c(markers.temp, bootstrap_genes)
         markers.temp <- unique(markers.temp)
       }
 
       #I add normal behaviour if there are zero genes with boostraping strategy (< iteration.minimun_number_markers)
       if(length(markers.temp) < iteration.minimun_number_markers & iteration.use_final_foldchange){
-
-        print('iteration.use_final_foldchange')
         #call the analizer with  min.p.adj_value = 0.05 that corresponds to the original version of the algorithm
         foldchange_genes = bootstrap_gene_finder(cluster_number, seurat_object, bootstrap.sample_size = bootstrap.sample_size, bootstrap.number = bootstrap.number, min.p.adj_value = 0.05)
         message1 <- paste0(message1, '\n', 'Foldchange generation: ', "(", length(foldchange_genes), ') -> Number of cells: ', number_cells, '. *****Genes: ', paste(shQuote(foldchange_genes), collapse=", "))
-        print(message1)
         markers.temp <- c(markers.temp, foldchange_genes)
         markers.temp <- unique(markers.temp)
       }
@@ -1951,12 +1930,9 @@ iteration_over_clusters_parallelized_wilcox_boostrap <- function(sc.eset, ct.gro
       }
 
       message2 <- paste0('\n','Final Genes', " (", length(markers.temp), '):',paste(shQuote(markers.temp), collapse=", "), "\n\n")
-      print(message2)
 
       #For checking the genes selected as markers for an specific cluster
       save_log_file(temporal_directory, paste0(cluster_name,'.log'), message1, message2)
-
-      print(paste0('end of loop: ', length(markers.temp)))
 
       markers.temp
     }
@@ -1989,14 +1965,13 @@ iteration_over_clusters_parallelized_wilcox_boostrap <- function(sc.eset, ct.gro
   markers.wilcox.final
 }
 
-
 ############################################
-#' Function that perform a boostrap process from one cluster over a set of other clusters applying at the end outlier analysis with dbscan.
-#' @description  Function that perform a boostrap process from one cluster over a set of other clusters applying at the end outlier analysis with dbscan.
+#' Function that performs a boostraping process from one cluster over a set of other clusters applying at the end outlier analysis with dbscan library
+#' @description Function that performs a boostraping process from one cluster over a set of other clusters applying at the end outlier analysis with dbscan library
 #' @name bootstrap_gene_finder
-#' @param LFC.lim a threshold of log fold change when selecting genes as input to perform Wilcoxon's test.
 #' @param cluster_number  Cluster number that the function has to process (TODO create a generalization for dataset with cluster with different names)
 #' @param seurat_object  Seural object for single cells that enable us to apply the function FindMarkers
+#' @param LFC.lim a threshold of log fold change when selecting genes as input to perform Wilcoxon's test.
 #' @param use_limit TRUE/FALSE. If the process selects just a fixed number of genes.
 #' @param maximo_genes Maximum number of genes that have to be selected.
 #' @param bootstrap.number  How many boostraping loops the algorithm is going to execute
@@ -2036,41 +2011,29 @@ bootstrap_gene_finder <- function(cluster_number, seurat_object, LFC.lim = 0.20,
 
     its_well_calculated <- TRUE
     markers.wilcox.bo <- NULL
-    print('before')
-
 
     result = tryCatch({
       markers.wilcox.bo <- FindMarkers(seurat_object, ident.1 = paste0("cluster_", cluster_number), ident.2 = other_clusters , only.pos = TRUE, logfc.threshold = LFC.lim)
     }, warning = function(w) {
-      print(paste0("warning", w))
+      print(paste0("Warning: ", w))
     }, error = function(e) {
-      print(paste0("error", e))
+      print(paste0("Error: ", e))
       its_well_calculated <- FALSE
     }, finally = {
     })
 
     if(its_well_calculated & !is.null(markers.wilcox.bo)){
-      print('into if its_well_calculated')
-
-     # print(paste0('is: ', is.null(markers.wilcox.bo), markers.wilcox.bo$p_val_adj))
-     # print(rownames(markers.wilcox.bo))
-      #print('after rownames')
-
-      #save(markers.wilcox.bo, file = "/mnt_volumen/temporal_objects_R/markers.wilcox.bo.r")
-
 
       result_markers = tryCatch({
         #the p_val_adj could be 0 or less than 0.05 normally
         filtered.wilcox <- markers.wilcox.bo[markers.wilcox.bo$p_val_adj <= min.p.adj_value & !is.na(markers.wilcox.bo$p_val_adj) & markers.wilcox.bo$avg_logFC >= 0.0 & !is.na(rownames(markers.wilcox.bo)) & rownames(markers.wilcox.bo) != 'NA',]
       }, warning = function(w) {
-        print(paste0("warning result_markers", w))
+        print(paste0("Warning result_markers: ", w))
       }, error = function(e) {
-        print(paste0("error result_markers", e))
+        print(paste0("Error result_markers: ", e))
         its_well_calculated <- FALSE
       }, finally = {
       })
-
-     # print(markers.wilcox.bo)
 
       #I get all new results
       temporal_result <- rownames(markers.wilcox.bo)
@@ -2086,10 +2049,8 @@ bootstrap_gene_finder <- function(cluster_number, seurat_object, LFC.lim = 0.20,
 
       final_result <- c(final_result, temporal_result)
       final_result <- unique(final_result)
-      print('after if its_well_calculated')
     }
   }
-  print('final result')
   final_result
 }
 
@@ -2098,11 +2059,12 @@ bootstrap_gene_finder <- function(cluster_number, seurat_object, LFC.lim = 0.20,
 #' @description  Function that selects the markers genes given a wilcox object by using dbscan algorithm and selecting just the genes that are considered like outliers (Without any cluster)
 #' @name calculate_genes_using_dbscan
 #' @param filtered.wilcox Wilcox object with the Foldchange analysis base on the comparison between each cluster amoung the others
+#' @param plot.dbscan.results Logical. Generate a plot for each cell type/ boostraping analysis. Default F.
 #' @return List with the marker genes
+#' @import fpc
+#' @import dbscan
 #' @export
 calculate_genes_using_dbscan <- function(filtered.wilcox, plot.dbscan.results = FALSE){
-  #library("fpc")
-  #library("dbscan")
   final_result <- NULL
 
   print(paste0('markers with 0: ', nrow(filtered.wilcox)))
@@ -2134,11 +2096,11 @@ calculate_genes_using_dbscan <- function(filtered.wilcox, plot.dbscan.results = 
 
 ############################################
 #' Function that calculates the foldchange between a given cluster over the rest
-#' @description Function that calculates the foldchange between a given cluster over the rest (It doesn't use an external library to apply the wilcox algorithm). At the end it uses bonferroni correction
+#' @description Function that calculates the foldchange between a given cluster over the rest (It doesn't use an external library to apply the wilcox algorithm). At the end it uses Bonferroni correction
 #' @name calculate_foldchange
-#' @param bulk.eset ExpressionSet object for bulk samples
 #' @param sc.eset ExpressionSet object for single cell samples
 #' @param ct.varname variable name for 'cell types'
+#' @param ct.group.temp Cell type that has to be used for the analysis.
 #' @param LFC.lim a threshold of log fold change when selecting genes as input to perform Wilcoxon's test.
 #' @return Estimated proportion, basis matrix, predicted gene expression levels for bulk samples
 #' @export
@@ -2210,26 +2172,26 @@ calculate_foldchange <- function(sc.eset, ct.varname, ct.group.temp, LFC.lim){
 #' @param ct.varname variable name for 'cell types'
 #' @param fl.varname variable name for first-level 'meta-clusters'
 #' @param sample variable name for subject/samples
+#' @param truep true cell-type proportions for bulk samples if known
 #' @param ct.sub a subset of cell types that are selected to construct basis matrix
 #' @param ct.fl.sub 'cell types' for first-level 'meta-clusters'
 #' @param iter.max the maximum number of iteration in WNNLS
 #' @param nu a small constant to facilitate the calculation of variance
 #' @param epsilon a small constant number used for convergence criteria
 #' @param weight.basis logical, use basis matrix adjusted by MVW, default is T.
+#' @param bulk_disease
 #' @param select.marker logical, select marker genes to perform deconvolution in tree-guided steps. Default is T.
 #' @param markers A set of marker gene that input manully to be used in deconvolution. If NULL, then
 #' @param marker.varname variable name of cluster groups when selecting marker genes. If NULL, then use ct.varname.
-#' @param allgenes.fl logical, use all genes in the first-level deconvolution
 #' @param pseudocount.use a constant number used when selecting marker genes, default is 1.
 #' @param LFC.lim a threshold of log fold change when selecting genes as input to perform Wilcoxon's test.
-#' @param truep true cell-type proportions for bulk samples if known
+#' @param allgenes.fl logical, use all genes in the first-level deconvolution
 #' @return Estimated proportion, basis matrix, predicted gene expression levels for bulk samples
 #' @export
 SCDC_prop_ONE_subcl_marker <- function(bulk.eset, sc.eset, ct.varname, fl.varname, sample, truep = NULL,
                                        ct.sub = NULL, ct.fl.sub, iter.max = 3000, nu = 1e-04, epsilon = 0.001,
                                        weight.basis = F, bulk_disease = NULL, select.marker = T, markers = NULL, marker.varname = NULL,
-                                       pseudocount.use = 1, LFC.lim = 0.5, allgenes.fl = F,
-                                       ...)
+                                       pseudocount.use = 1, LFC.lim = 0.5, allgenes.fl = F, ...)
 {
 
   if (is.null(ct.sub)){
