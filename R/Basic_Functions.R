@@ -17,7 +17,6 @@
 #library(slam)
 custom_apply <- function (X, MARGIN, FUN)
 {
-  library(Matrix)
   x_value <- as.simple_triplet_matrix(X)
 
   if(MARGIN==1){
@@ -38,7 +37,6 @@ custom_apply <- function (X, MARGIN, FUN)
 #' @import Matrix
 #' @export
 getCPM0 <- function(x, verbose = F){
-  library(Matrix)
   if (is.null(dim(x))){
     if (verbose){
       message("Normalizing a vector instead of a matrix")
@@ -47,7 +45,7 @@ getCPM0 <- function(x, verbose = F){
     vec
   } else {
     #Using the custom_apply for sparse matrix
-    cpm <- t(t(x)/custom_apply(x,2,sum))
+    cpm <- Matrix::t(Matrix::t(x)/custom_apply(x,2,sum))
     cpm
   }
 }
