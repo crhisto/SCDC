@@ -35,7 +35,7 @@ Note of the current repository
 
 This repository is a clone of https://github.com/crhisto/SCDC. It contains the following modifications: 
    - Compatibility with sparse matrices using: `dgCMatrix` objects in R.
-   - Rutines with parallelization
+   - Routines with parallelization
    - Dynamic threshold for markers selection
    - Improvements in logs and so on.
 
@@ -52,6 +52,6 @@ if("SCDC" %in% rownames(installed.packages())){
 }
 ```
 
-Also you must use the following libraries with support of sparse matrix (`dgCMatrix`) for large scRNA-seq datasets: 
+Also, you must use the following libraries with support of sparse matrix (`dgCMatrix`) for large scRNA-seq datasets: 
 - Biobase: [https://github.com/crhisto/Biobase](https://github.com/crhisto/Biobase)
 - xbioc: [https://github.com/crhisto/xbioc](https://github.com/crhisto/xbioc)
