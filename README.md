@@ -28,3 +28,30 @@ Vignettes
 Please see the [vignettes page](https://meichendong.github.io/SCDC/articles/SCDC.html).
 
 The SCDC paper is published at [Briefings In Bioinformatics](https://doi.org/10.1093/bib/bbz166).
+
+
+Note of the current repository
+---------
+
+This repository is a clone of https://github.com/crhisto/SCDC. It contains the following modifications: 
+   - Compatibility with sparse matrices using: `dgCMatrix` objects in R.
+   - Rutines with parallelization
+   - Dynamic threshold for markers selection
+   - Improvements in logs and so on.
+
+This has been done as part of the project: https://github.com/crhisto/thymus_NPM-ALK_notebook. 
+
+If you want to install the SCDC library with these modifications you can use: 
+
+``` r
+if("SCDC" %in% rownames(installed.packages())){
+  library(xbioc)
+}else{
+  devtools::install_github( repo = "crhisto/SCDC")
+  library(SCDC)
+}
+```
+
+Also you must use the following libraries with support of sparse matrix (`dgCMatrix`) for large scRNA-seq datasets: 
+- Biobase: [https://github.com/crhisto/Biobase](https://github.com/crhisto/Biobase)
+- xbioc: [https://github.com/crhisto/xbioc](https://github.com/crhisto/xbioc)
