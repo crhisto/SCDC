@@ -45,7 +45,7 @@ If you want to install the SCDC library with these modifications you can use:
 
 ``` r
 if("SCDC" %in% rownames(installed.packages())){
-  library(xbioc)
+  library(SCDC)
 }else{
   devtools::install_github( repo = "crhisto/SCDC")
   library(SCDC)
