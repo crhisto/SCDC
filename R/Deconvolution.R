@@ -1220,7 +1220,7 @@ SCDC_prop_subcl_marker <- function(bulk.eset, sc.eset, ct.varname, fl.varname, s
   rownames(prop.est) <- colnames(bulk.eset)
 
   #Adding the names of the residuals matrices in the list object which is the same of the bulk dataset
-  names(residuals.list) <- colnames(bulk.eset)
+  #names(residuals.list) <- colnames(bulk.eset)
   names(residuals_by_sample.list) <- colnames(bulk.eset)
   names(residuals_by_sample.list.fl) <- colnames(bulk.eset)
 
@@ -1815,6 +1815,8 @@ iteration_over_clusters_parallelized_wilcox_boostrap <- function(sc.eset, ct.gro
                              assay = "RNA")
 
   Idents(seurat_object) <- sc.eset$cluster_normalized
+
+
   cells_by_cluster <- as.matrix(table(Idents(seurat_object)))
 
   print('Executing parallelized function...')
@@ -2069,9 +2071,13 @@ calculate_genes_using_dbscan <- function(filtered.wilcox, plot.dbscan.results = 
 
   print(paste0('markers with 0: ', nrow(filtered.wilcox)))
 
+  #If there are values with Inf (infinite), I have to clean it, otherwise it will be an error in the code.
+  filtered.wilcox <- filtered.wilcox[!is.infinite(filtered.wilcox[,'avg_logFC']),]
+
   if(nrow(filtered.wilcox)>0){
     # Compute DBSCAN using fpc package
     db <- fpc::dbscan(filtered.wilcox[,c(2)], eps = 0.5, MinPts = 5)
+
     length(db$cluster[db$cluster==0])
 
     # Plot DBSCAN results
